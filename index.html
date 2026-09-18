@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voice Studio</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2a2f3a;
+    --text:#e8eaf0; --mute:#8b93a5; --accent:#7c9cff; --accent2:#5eead4;
+    --bad:#ff6b6b; --good:#4ade80; --warn:#fbbf24;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);
+    font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  .wrap{max-width:1080px;margin:0 auto;padding:22px 18px 80px}
+  h1{font-size:22px;margin:0 0 2px;letter-spacing:.2px}
+  .sub{color:var(--mute);margin:0 0 18px;font-size:13px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:860px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .card h2{font-size:14px;margin:0 0 12px;text-transform:uppercase;letter-spacing:.8px;color:var(--mute);font-weight:600}
+  .full{grid-column:1/-1}
+  label{display:block;font-size:12px;color:var(--mute);margin:10px 0 4px}
+  input[type=text],select,textarea{
+    width:100%;background:var(--panel2);color:var(--text);border:1px solid var(--line);
+    border-radius:8px;padding:9px 10px;font:inherit}
+  textarea{min-height:230px;resize:vertical;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13.5px;line-height:1.55}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  button{background:var(--accent);color:#0b1020;border:0;border-radius:8px;padding:9px 14px;
+    font:inherit;font-weight:600;cursor:pointer}
+  button:hover{filter:brightness(1.08)}
+  button:disabled{opacity:.45;cursor:not-allowed;filter:none}
+  button.ghost{background:var(--panel2);color:var(--text);border:1px solid var(--line)}
+  button.danger{background:transparent;color:var(--bad);border:1px solid var(--line);padding:6px 10px}
+  button.big{padding:12px 20px;font-size:15px}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .row>*{flex:0 0 auto}
+  .grow{flex:1 1 auto!important}
+  .status{font-size:13px;color:var(--mute)}
+  .bar{height:8px;background:var(--panel2);border-radius:99px;overflow:hidden;margin-top:8px}
+  .bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .2s}
+  .pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:99px;background:var(--panel2);border:1px solid var(--line);color:var(--mute)}
+  .pill.ok{color:var(--good);border-color:#24503a}
+  .pill.bad{color:var(--bad);border-color:#5a2a2a}
+  .voice{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px}
+  .voice .top{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+  .voice .top input{flex:1}
+  .dot{width:12px;height:12px;border-radius:50%;flex:0 0 12px}
+  .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .tag{font-size:12px;padding:3px 9px;border-radius:99px;background:var(--panel2);border:1px solid var(--line);
+    cursor:pointer;user-select:none}
+  .tag:hover{border-color:var(--accent);color:var(--accent)}
+  .note{font-size:12px;color:var(--mute);background:var(--panel2);border-left:3px solid var(--warn);
+    padding:9px 11px;border-radius:6px;margin-top:10px}
+  .note b{color:var(--text)}
+  audio{width:100%;margin-top:10px}
+  .log{font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;color:var(--mute);background:var(--panel2);
+    border-radius:8px;padding:10px;max-height:150px;overflow:auto;white-space:pre-wrap;margin-top:10px}
+  .timeline{display:flex;height:26px;border-radius:6px;overflow:hidden;margin-top:10px;background:var(--panel2)}
+  .timeline div{height:100%}
+  .err{color:var(--bad)}
+  code{background:var(--panel2);padding:1px 5px;border-radius:4px;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Voice Studio</h1>
+  <p class="sub">Personal in-browser text-to-speech with voice cloning. Runs fully on your device &mdash; nothing is uploaded.</p>
+
+  <div class="grid">
+
+    <!-- MODEL -->
+    <div class="card full">
+      <h2>1 &middot; Model</h2>
+      <div class="row">
+        <button id="loadBtn">Load model</button>
+        <span id="devicePill" class="pill">not loaded</span>
+        <span id="modelStatus" class="status grow">First load downloads about 1.5&nbsp;GB, then it is cached by your browser.</span>
+      </div>
+      <div class="bar"><i id="modelBar"></i></div>
+    </div>
+
+    <!-- VOICES -->
+    <div class="card">
+      <h2>2 &middot; Voices</h2>
+      <div id="voices"></div>
+      <div class="row">
+        <button class="ghost" id="addVoice">+ Add voice</button>
+      </div>
+      <div class="note">
+        Give each voice <b>5&ndash;15 seconds of clean speech</b> (one speaker, no music, little echo).
+        Upload a file or record from your mic. Names must match the names you use in the script.
+        Only clone voices you have the right to use.
+      </div>
+    </div>
+
+    <!-- SCRIPT -->
+    <div class="card">
+      <h2>3 &middot; Script</h2>
+      <label for="script">One line per turn: <code>Voice 1 [Mike] text</code> &mdash; or just <code>Mike: text</code>. Put emotion tags anywhere in a line.</label>
+      <textarea id="script" spellcheck="false">Voice 1 [Mike] The weather is nice out today.
+Voice 2 [Aru] Yes, the weather is not too hot.
+Voice 1 [Mike] [nervous] But it's supposed to rain tomorrow.</textarea>
+      <div class="tags" id="tagBar"></div>
+      <div class="row" style="margin-top:12px">
+        <div class="grow">
+          <label style="margin-top:0">Base expressiveness: <b id="expVal">0.50</b></label>
+          <input type="range" id="exp" min="0.2" max="1.2" step="0.05" value="0.5">
+        </div>
+        <div class="grow">
+          <label style="margin-top:0">Pause between lines: <b id="pauseVal">0.35</b>s</label>
+          <input type="range" id="pause" min="0" max="1.5" step="0.05" value="0.35">
+        </div>
+      </div>
+      <div class="note">
+        <b>How emotions work:</b> this model has no true emotion understanding. Tags like <code>[angry]</code>
+        change its expressiveness knob and then shape speed, pitch, loudness and tone on top.
+        It is a convincing nudge, not real acting. Tags are never spoken aloud.
+      </div>
+    </div>
+
+    <!-- GENERATE -->
+    <div class="card full">
+      <h2>4 &middot; Generate</h2>
+      <div class="row">
+        <button class="big" id="genBtn" disabled>Generate audio</button>
+        <button class="ghost" id="stopBtn" disabled>Stop</button>
+        <button class="ghost" id="mp3Btn" disabled>Download MP3</button>
+        <button class="ghost" id="wavBtn" disabled>Download WAV</button>
+        <span id="genStatus" class="status grow"></span>
+      </div>
+      <div class="bar"><i id="genBar"></i></div>
+      <div class="timeline" id="timeline"></div>
+      <audio id="player" controls></audio>
+      <div class="log" id="log"></div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
+<script type="module">
+import { AutoProcessor, ChatterboxModel, Tensor, env }
+  from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4";
+
+/* ============================ CONFIG ============================ */
+const MODEL_ID = "onnx-community/chatterbox-ONNX";
+const SR = 24000;                 // Chatterbox output rate
+const MAX_CHARS = 110;            // short chunks keep the model stable
+const MAX_NEW_TOKENS = 380;       // budget per chunk
+const COLORS = ["#7c9cff","#5eead4","#fbbf24","#f472b6","#a78bfa","#fb923c","#34d399","#60a5fa"];
+
+/* Emotion recipe. expr = exaggeration override (absolute), speed = playback rate
+   (also shifts pitch slightly), gain = loudness, tone = -1 dark .. +1 bright,
+   whisper = breathy noise-mix + low volume. Values are tuned for plausibility. */
+const EMOTIONS = {
+  happy:        { expr:0.80, speed:1.06, gain:1.05, tone:+0.4 },
+  excited:      { expr:0.95, speed:1.12, gain:1.10, tone:+0.5 },
+  sad:          { expr:0.65, speed:0.90, gain:0.85, tone:-0.5 },
+  mad:          { expr:0.90, speed:1.05, gain:1.15, tone:-0.2 },
+  angry:        { expr:1.05, speed:1.08, gain:1.25, tone:-0.1 },
+  yelling:      { expr:1.15, speed:1.06, gain:1.55, tone:+0.3 },
+  whispering:   { expr:0.30, speed:0.94, gain:0.55, tone:+0.2, whisper:1 },
+  calm:         { expr:0.30, speed:0.95, gain:0.95, tone:-0.2 },
+  nervous:      { expr:0.75, speed:1.10, gain:0.92, tone:+0.1 },
+  scared:       { expr:0.90, speed:1.14, gain:0.90, tone:+0.3 },
+  "fast talking":{ expr:0.65, speed:1.30, gain:1.0,  tone:0 },
+  "slow talking":{ expr:0.40, speed:0.78, gain:1.0,  tone:-0.1 },
+  serious:      { expr:0.35, speed:0.96, gain:1.0,  tone:-0.3 },
+  tired:        { expr:0.30, speed:0.84, gain:0.82, tone:-0.5 },
+  sarcastic:    { expr:0.70, speed:0.94, gain:1.0,  tone:-0.1 },
+  confident:    { expr:0.65, speed:0.98, gain:1.08, tone:-0.1 },
+  neutral:      { expr:0.50, speed:1.0,  gain:1.0,  tone:0 },
+};
+/* Extra aliases so natural wording still works. */
+const ALIAS = {
+  whisper:"whispering", whispered:"whispering", quiet:"whispering", shouting:"yelling",
+  shout:"yelling", yell:"yelling", furious:"angry", anger:"angry", upset:"sad",
+  joy:"happy", cheerful:"happy", fear:"scared", afraid:"scared", anxious:"nervous",
+  fast:"fast talking", slow:"slow talking", relaxed:"calm", soft:"calm"
+};
+
+/* ============================ STATE ============================ */
+let model = null, processor = null, device = "cpu";
+let voices = [];                 // {id,name,color,samples:Float32Array|null,speaker:obj|null,label}
+let abort = false, busy = false;
+let lastWave = null;             // Float32Array @ SR
+let audioUrl = null;
+
+const $ = s => document.querySelector(s);
+const log = (m, cls="") => {
+  const el = $("#log"); const d = document.createElement("div");
+  if (cls) d.className = cls; d.textContent = m; el.appendChild(d); el.scrollTop = el.scrollHeight;
+};
+
+/* ============================ TAG BAR ============================ */
+const tagBar = $("#tagBar");
+Object.keys(EMOTIONS).forEach(t=>{
+  const s = document.createElement("span");
+  s.className="tag"; s.textContent="["+t+"]";
+  s.onclick = ()=>insertAtCursor("["+t+"] ");
+  tagBar.appendChild(s);
+});
+function insertAtCursor(txt){
+  const ta=$("#script"), a=ta.selectionStart, b=ta.selectionEnd;
+  ta.value = ta.value.slice(0,a)+txt+ta.value.slice(b);
+  ta.focus(); ta.selectionStart=ta.selectionEnd=a+txt.length;
+}
+$("#exp").oninput = e => $("#expVal").textContent = (+e.target.value).toFixed(2);
+$("#pause").oninput = e => $("#pauseVal").textContent = (+e.target.value).toFixed(2);
+
+/* ============================ AUDIO HELPERS ============================ */
+async function decodeToMono(arrayBuffer, targetSR){
+  const ctx = new (window.AudioContext||window.webkitAudioContext)();
+  const buf = await ctx.decodeAudioData(arrayBuffer.slice(0));
+  ctx.close();
+  const len = Math.ceil(buf.duration * targetSR);
+  const off = new OfflineAudioContext(1, len, targetSR);
+  const src = off.createBufferSource(); src.buffer = buf;
+  src.connect(off.destination); src.start();
+  const out = await off.startRendering();
+  return out.getChannelData(0).slice();
+}
+function trimSilence(x, thr=0.008){
+  let a=0,b=x.length-1;
+  while(a<b && Math.abs(x[a])<thr) a++;
+  while(b>a && Math.abs(x[b])<thr) b--;
+  return x.slice(Math.max(0,a-2400), Math.min(x.length,b+2400));
+}
+function peakNormalize(x, peak=0.95){
+  let m=0; for(let i=0;i<x.length;i++){const v=Math.abs(x[i]); if(v>m)m=v;}
+  if(m<1e-6) return x; const g=peak/m; const o=new Float32Array(x.length);
+  for(let i=0;i<x.length;i++) o[i]=x[i]*g; return o;
+}
+/* Resample by playback rate (changes pitch a little, like tape speed). */
+function resampleRate(x, rate){
+  if(Math.abs(rate-1)<0.005) return x;
+  const n=Math.floor(x.length/rate), o=new Float32Array(n);
+  for(let i=0;i<n;i++){
+    const p=i*rate, i0=Math.floor(p), f=p-i0;
+    o[i]=(x[i0]||0)*(1-f)+(x[i0+1]||0)*f;
+  }
+  return o;
+}
+/* Simple one-pole tilt EQ: tone>0 brightens, tone<0 darkens. */
+function toneShape(x, tone){
+  if(Math.abs(tone)<0.02) return x;
+  const o=new Float32Array(x.length);
+  const a=0.5+0.4*Math.abs(tone);          // smoothing amount
+  let lp=0;
+  for(let i=0;i<x.length;i++){
+    lp = lp + (1-a)*(x[i]-lp);              // low-pass
+    const hp = x[i]-lp;                     // high-pass
+    o[i] = tone>0 ? x[i] + hp*tone*1.1 : x[i]*(1+tone*0.3) + lp*(-tone)*0.5;
+  }
+  return o;
+}
+/* Whisper: high-pass the voice, add filtered noise shaped by its envelope. */
+function whisperize(x){
+  const o=new Float32Array(x.length);
+  let lp=0, env=0, n1=0;
+  for(let i=0;i<x.length;i++){
+    lp = lp + 0.08*(x[i]-lp); const hp=x[i]-lp;
+    env = env*0.995 + Math.abs(x[i])*0.005;         // slow envelope
+    const noise=(Math.random()*2-1); n1 = n1*0.35 + noise*0.65; // gently coloured noise
+    o[i] = hp*0.45 + n1*Math.min(1,env*9)*0.55;
+  }
+  return o;
+}
+function applyGain(x,g){ const o=new Float32Array(x.length); for(let i=0;i<x.length;i++) o[i]=x[i]*g; return o; }
+function softClip(x){ const o=new Float32Array(x.length); for(let i=0;i<x.length;i++) o[i]=Math.tanh(x[i]*1.15)/Math.tanh(1.15); return o; }
+function silence(sec){ return new Float32Array(Math.round(sec*SR)); }
+function concat(list){
+  let n=0; for(const a of list) n+=a.length;
+  const o=new Float32Array(n); let p=0; for(const a of list){o.set(a,p);p+=a.length;} return o;
+}
+function fadeEdges(x, ms=12){
+  const n=Math.min(Math.floor(SR*ms/1000), x.length>>1);
+  for(let i=0;i<n;i++){ const g=i/n; x[i]*=g; x[x.length-1-i]*=g; } return x;
+}
+
+/* ============================ ENCODERS ============================ */
+function toWav(f32, sr){
+  const n=f32.length, buf=new ArrayBuffer(44+n*2), v=new DataView(buf);
+  const w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i));};
+  w(0,"RIFF"); v.setUint32(4,36+n*2,true); w(8,"WAVE"); w(12,"fmt ");
+  v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
+  v.setUint32(24,sr,true); v.setUint32(28,sr*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true);
+  w(36,"data"); v.setUint32(40,n*2,true);
+  for(let i=0;i<n;i++){ const s=Math.max(-1,Math.min(1,f32[i])); v.setInt16(44+i*2, s<0?s*0x8000:s*0x7FFF, true); }
+  return new Blob([buf],{type:"audio/wav"});
+}
+function toMp3(f32, sr, kbps=128){
+  if(!window.lamejs) throw new Error("MP3 encoder failed to load (check your connection).");
+  const i16=new Int16Array(f32.length);
+  for(let i=0;i<f32.length;i++){ const s=Math.max(-1,Math.min(1,f32[i])); i16[i]=s<0?s*0x8000:s*0x7FFF; }
+  const enc=new lamejs.Mp3Encoder(1,sr,kbps), out=[], blk=1152;
+  for(let i=0;i<i16.length;i+=blk){ const b=enc.encodeBuffer(i16.subarray(i,i+blk)); if(b.length) out.push(new Uint8Array(b)); }
+  const end=enc.flush(); if(end.length) out.push(new Uint8Array(end));
+  return new Blob(out,{type:"audio/mpeg"});
+}
+function download(blob,name){
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+
+/* ============================ VOICES UI ============================ */
+let vid=0;
+function addVoice(name){
+  const v={ id:++vid, name:name||("Voice "+vid), color:COLORS[(vid-1)%COLORS.length],
+            samples:null, speaker:null, label:"no sample" };
+  voices.push(v); renderVoices(); return v;
+}
+function renderVoices(){
+  const box=$("#voices"); box.innerHTML="";
+  voices.forEach((v,idx)=>{
+    const el=document.createElement("div"); el.className="voice";
+    el.innerHTML=`
+      <div class="top">
+        <span class="dot" style="background:${v.color}"></span>
+        <input type="text" value="${v.name.replace(/"/g,"&quot;")}" data-k="name" placeholder="Name (e.g. Mike)">
+        <span class="pill ${v.samples?'ok':''}">${v.label}</span>
+        ${voices.length>1?'<button class="danger" data-k="del">Remove</button>':''}
+      </div>
+      <div class="row">
+        <input type="file" accept="audio/*" data-k="file" class="grow">
+        <button class="ghost" data-k="rec">● Record</button>
+        <button class="ghost" data-k="prev" ${v.samples?'':'disabled'}>Play sample</button>
+      </div>`;
+    el.querySelector('[data-k=name]').oninput = e => { v.name=e.target.value; };
+    const del=el.querySelector('[data-k=del]'); if(del) del.onclick=()=>{ voices.splice(idx,1); renderVoices(); };
+    el.querySelector('[data-k=file]').onchange = async e => {
+      const f=e.target.files[0]; if(!f) return;
+      try{ await setSample(v, await f.arrayBuffer(), f.name); }
+      catch(err){ log("Could not read "+f.name+": "+err.message,"err"); }
+    };
+    el.querySelector('[data-k=prev]').onclick = ()=>previewSample(v);
+    const rec=el.querySelector('[data-k=rec]');
+    rec.onclick = ()=>toggleRecord(v, rec);
+    box.appendChild(el);
+  });
+}
+async function setSample(v, ab, label){
+  let x = await decodeToMono(ab, SR);
+  x = peakNormalize(trimSilence(x));
+  const sec = x.length/SR;
+  if(sec<2){ throw new Error("sample is too short ("+sec.toFixed(1)+"s). Use 5-15s."); }
+  if(sec>30){ x = x.slice(0, SR*30); log("Sample was longer than 30s; using the first 30s."); }
+  v.samples=x; v.speaker=null; v.label=(label||"recorded").slice(0,18)+" · "+Math.min(sec,30).toFixed(1)+"s";
+  renderVoices();
+  log(`Sample for "${v.name}" ready (${Math.min(sec,30).toFixed(1)}s).`);
+}
+function previewSample(v){
+  if(!v.samples) return; $("#player").src=URL.createObjectURL(toWav(v.samples,SR)); $("#player").play();
+}
+let recState=null;
+async function toggleRecord(v, btn){
+  if(recState){ recState.stop(); return; }
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}});
+    const mr=new MediaRecorder(stream), chunks=[];
+    mr.ondataavailable=e=>chunks.push(e.data);
+    mr.onstop=async ()=>{
+      stream.getTracks().forEach(t=>t.stop()); btn.textContent="● Record"; btn.classList.remove("danger"); recState=null;
+      try{ await setSample(v, await new Blob(chunks).arrayBuffer(), "recording"); }
+      catch(err){ log(err.message,"err"); }
+    };
+    mr.start(); recState=mr; btn.textContent="■ Stop"; btn.classList.add("danger");
+    log("Recording "+v.name+"… speak naturally for 8-12 seconds, then press Stop.");
+  }catch(err){ log("Microphone unavailable: "+err.message,"err"); }
+}
+
+/* ============================ MODEL ============================ */
+$("#loadBtn").onclick = loadModel;
+async function loadModel(){
+  if(model) return;
+  $("#loadBtn").disabled=true;
+  const hasGPU = !!navigator.gpu;
+  device = hasGPU ? "webgpu" : "wasm";
+  const set=(t,p)=>{ $("#modelStatus").textContent=t; if(p!=null) $("#modelBar").style.width=p+"%"; };
+  env.useBrowserCache = true;
+  const files={}; 
+  const progress=e=>{
+    if(e.status==="progress" && e.file){
+      files[e.file]={l:e.loaded||0,t:e.total||0};
+      let L=0,T=0; for(const k in files){L+=files[k].l;T+=files[k].t;}
+      if(T) set(`Downloading model… ${(L/1e6).toFixed(0)} / ${(T/1e6).toFixed(0)} MB`, (L/T)*100);
+    } else if(e.status==="done"){ /* file finished */ }
+  };
+  const plans = hasGPU
+    ? [ {device:"webgpu", dtype:{embed_tokens:"fp32",speech_encoder:"fp32",language_model:"q4f16",conditional_decoder:"fp32"}},
+        {device:"webgpu", dtype:{embed_tokens:"fp32",speech_encoder:"fp32",language_model:"q4",conditional_decoder:"fp32"}},
+        {device:"wasm",   dtype:{embed_tokens:"fp32",speech_encoder:"fp32",language_model:"q4",conditional_decoder:"fp32"}} ]
+    : [ {device:"wasm",   dtype:{embed_tokens:"fp32",speech_encoder:"fp32",language_model:"q4",conditional_decoder:"fp32"}} ];
+  let lastErr=null;
+  for(const p of plans){
+    try{
+      set(`Loading (${p.device}/${p.dtype.language_model})… first run downloads ~1.5 GB`,0);
+      model = await ChatterboxModel.from_pretrained(MODEL_ID,{device:p.device,dtype:p.dtype,progress_callback:progress});
+      processor = await AutoProcessor.from_pretrained(MODEL_ID);
+      device=p.device; lastErr=null; break;
+    }catch(err){ lastErr=err; model=null; log(`Load plan ${p.device}/${p.dtype.language_model} failed: ${err.message}`,"err"); }
+  }
+  if(lastErr){
+    set("Model failed to load. See log below.",0);
+    $("#loadBtn").disabled=false; return;
+  }
+  set("Model ready. Compiling runs once per session, so the first line may be slow.",100);
+  $("#devicePill").textContent=device.toUpperCase(); $("#devicePill").className="pill ok";
+  if(device==="wasm") log("Running on CPU (WASM). It works but is much slower than real time. Chrome/Edge with WebGPU is recommended.","err");
+  $("#genBtn").disabled=false;
+}
+
+/* ============================ SCRIPT PARSER ============================ */
+/* Accepts:
+     Voice 1 [Mike] text
+     Mike: text
+     [Mike] text          (name in brackets, only if it matches a voice name)
+   Leading unmatched lines continue the previous speaker.
+   Inline [emotion] tags may appear anywhere; they apply from that point onward in the line. */
+function normTag(t){
+  t=t.trim().toLowerCase(); if(EMOTIONS[t]) return t; if(ALIAS[t]) return ALIAS[t]; return null;
+}
+function findVoiceByName(n){
+  n=n.trim().toLowerCase();
+  return voices.find(v=>v.name.trim().toLowerCase()===n) || null;
+}
+function parseScript(src){
+  const lines=src.split(/\r?\n/), turns=[]; let cur=voices[0]||null;
+  for(let raw of lines){
+    let line=raw.trim(); if(!line) continue;
+    let spk=null, rest=line, m;
+    if((m=line.match(/^voice\s*\d+\s*\[([^\]]+)\]\s*:?\s*(.*)$/i))){ spk=findVoiceByName(m[1]); rest=m[2]; if(!spk) spk={missing:m[1].trim()}; }
+    else if((m=line.match(/^([A-Za-z0-9_' -]{1,24}):\s+(.*)$/))){
+      // "Name: text" (colon followed by a space). Unknown short names are an error,
+      // not dialogue, so a typo never gets read aloud as "Bob colon hello".
+      const f=findVoiceByName(m[1]);
+      if(f){ spk=f; rest=m[2]; }
+      else if(m[1].trim().split(/\s+/).length<=2 && !/[.!?,]/.test(m[1])){ spk={missing:m[1].trim()}; rest=m[2]; }
+    }
+    else if((m=line.match(/^\[([^\]]+)\]\s*(.*)$/))){ const f=findVoiceByName(m[1]); if(f && !normTag(m[1])){spk=f;rest=m[2];} }
+    if(spk && spk.missing){ turns.push({error:`No voice named "${spk.missing}". Add it under Voices.`}); continue; }
+    if(spk) cur=spk;
+    if(!cur){ turns.push({error:"Add at least one voice first."}); continue; }
+    turns.push({voice:cur, text:rest});
+  }
+  return turns;
+}
+/* Split a turn into segments [{emotion,text}], respecting inline tags. */
+function segmentTurn(text){
+  const out=[]; let emo="neutral", buf="", last=0; const re=/\[([^\]]+)\]/g; let m;
+  const flush=(s)=>{ s=s.replace(/\s+/g," ").trim(); if(s) out.push({emotion:emo,text:s}); };
+  while((m=re.exec(text))){
+    const tag=normTag(m[1]);
+    if(tag){ flush(text.slice(last,m.index)); emo=tag; last=m.index+m[0].length; }
+    else { /* unknown bracket: leave text as is, not spoken */ flush(text.slice(last,m.index)); last=m.index+m[0].length; log(`Unknown tag [${m[1]}] ignored.`); }
+  }
+  flush(text.slice(last)); return out;
+}
+/* Break a segment into chunks the model can handle. */
+function chunkText(t){
+  const sent=t.match(/[^.!?…]+[.!?…]+["')\]]*|[^.!?…]+$/g)||[t]; const out=[]; let cur="";
+  for(const s0 of sent){
+    const s=s0.trim(); if(!s) continue;
+    if((cur+" "+s).trim().length<=MAX_CHARS){ cur=(cur+" "+s).trim(); }
+    else{
+      if(cur) out.push(cur);
+      if(s.length<=MAX_CHARS){ cur=s; }
+      else{ // very long sentence: split at clauses first, then balanced word splits
+        const clauses=s.split(/(?<=[,;:—–])\s+/); let piece="";
+        const pushWords=(c)=>{ // clause itself too long: split into evenly sized word groups
+          const words=c.split(/\s+/); const n=Math.ceil(c.length/MAX_CHARS); const per=Math.ceil(words.length/n);
+          for(let k=0;k<words.length;k+=per) out.push(words.slice(k,k+per).join(" "));
+        };
+        for(const c of clauses){
+          if(c.length>MAX_CHARS){ if(piece){out.push(piece);piece="";} pushWords(c); }
+          else if((piece+" "+c).trim().length>MAX_CHARS){ out.push(piece); piece=c; }
+          else piece=(piece+" "+c).trim();
+        }
+        cur=piece;
+      }
+    }
+  }
+  if(cur) out.push(cur);
+  // very short fragments destabilise the model: merge forward
+  const merged=[]; for(const c of out){ if(merged.length && c.length<14) merged[merged.length-1]+=" "+c; else merged.push(c); }
+  return merged;
+}
+
+/* ============================ SYNTHESIS ============================ */
+async function speakerFor(v){
+  if(v.speaker) return v.speaker;
+  const t=new Tensor("float32", v.samples, [1, v.samples.length]);
+  v.speaker = await model.encode_speech(t);
+  return v.speaker;
+}
+async function synth(text, v, exaggeration){
+  const inputs = await processor(text);
+  const spk = await speakerFor(v);
+  const out = await model.generate({ ...inputs, ...spk, exaggeration, max_new_tokens: MAX_NEW_TOKENS });
+  // The model returns a tensor-like waveform; normalise to Float32Array.
+  const data = out?.data ? out.data : (out?.waveform?.data ?? out);
+  return Float32Array.from(data);
+}
+function shapeForEmotion(wave, emo, baseExp){
+  const r=EMOTIONS[emo]||EMOTIONS.neutral;
+  let x=wave;
+  x=resampleRate(x, r.speed);
+  if(r.whisper) x=whisperize(x);
+  x=toneShape(x, r.tone||0);
+  x=applyGain(x, r.gain||1);
+  x=softClip(x);
+  return fadeEdges(x);
+}
+
+$("#genBtn").onclick = generate;
+$("#stopBtn").onclick = ()=>{ abort=true; $("#genStatus").textContent="Stopping after the current chunk…"; };
+
+async function generate(){
+  if(busy||!model) return;
+  const missing=voices.filter(v=>!v.samples);
+  const turns=parseScript($("#script").value);
+  const used=new Set(turns.filter(t=>t.voice).map(t=>t.voice));
+  const needing=[...used].filter(v=>!v.samples);
+  if(!turns.length){ log("Script is empty.","err"); return; }
+  const firstErr=turns.find(t=>t.error); if(firstErr){ log(firstErr.error,"err"); return; }
+  if(needing.length){ log("These voices still need a sample: "+needing.map(v=>v.name).join(", "),"err"); return; }
+
+  // Build a flat work list.
+  const work=[]; 
+  turns.forEach((t,ti)=>{
+    for(const seg of segmentTurn(t.text)){
+      for(const ch of chunkText(seg.text)) work.push({turn:ti, voice:t.voice, emotion:seg.emotion, text:ch});
+    }
+  });
+  if(!work.length){ log("Nothing to speak (only tags?).","err"); return; }
+
+  busy=true; abort=false; $("#genBtn").disabled=true; $("#stopBtn").disabled=false;
+  $("#mp3Btn").disabled=$("#wavBtn").disabled=true; $("#timeline").innerHTML=""; $("#log").innerHTML="";
+  const baseExp=+$("#exp").value, pauseSec=+$("#pause").value;
+  const t0=performance.now(); const parts=[]; const spans=[]; let prevTurn=-1;
+
+  try{
+    for(let i=0;i<work.length;i++){
+      if(abort) throw new Error("__abort__");
+      const w=work[i]; const r=EMOTIONS[w.emotion]||EMOTIONS.neutral;
+      // Emotion sets expression; the base slider scales it up/down around 0.5.
+      const exagg=Math.max(0.1, Math.min(1.5, r.expr + (baseExp-0.5)));
+      $("#genStatus").textContent=`Chunk ${i+1}/${work.length} · ${w.voice.name}${w.emotion!=="neutral"?" ["+w.emotion+"]":""}`;
+      $("#genBar").style.width=((i/work.length)*100)+"%";
+      const raw=await synth(w.text, w.voice, exagg);
+      if(!raw.length) throw new Error(`No audio came back for: "${w.text}"`);
+      const shaped=shapeForEmotion(raw, w.emotion, baseExp);
+      if(prevTurn!==-1 && w.turn!==prevTurn) parts.push(silence(pauseSec));
+      else if(prevTurn!==-1) parts.push(silence(0.08));
+      parts.push(shaped); spans.push({len:shaped.length, color:w.voice.color, pre:(prevTurn!==-1&&w.turn!==prevTurn)?Math.round(pauseSec*SR):0});
+      prevTurn=w.turn;
+      const el=(performance.now()-t0)/1000;
+      log(`✓ ${w.voice.name}${w.emotion!=="neutral"?" ["+w.emotion+"]":""} (${(shaped.length/SR).toFixed(1)}s, exagg ${exagg.toFixed(2)}, ${el.toFixed(0)}s elapsed)`);
+      await new Promise(r=>setTimeout(r,0)); // let the UI breathe
+    }
+    lastWave = peakNormalize(concat(parts), 0.92);
+    finish(spans);
+    $("#genStatus").textContent=`Done · ${(lastWave.length/SR).toFixed(1)}s of audio in ${((performance.now()-t0)/1000).toFixed(0)}s`;
+    $("#genBar").style.width="100%";
+  }catch(err){
+    if(err.message==="__abort__"){
+      if(parts.length){ lastWave=peakNormalize(concat(parts),0.92); finish(spans); $("#genStatus").textContent="Stopped. Partial audio kept."; }
+      else $("#genStatus").textContent="Stopped.";
+    } else { log("Generation failed: "+err.message,"err"); $("#genStatus").textContent="Failed."; console.error(err); }
+  }finally{
+    busy=false; $("#genBtn").disabled=false; $("#stopBtn").disabled=true;
+  }
+}
+function finish(spans){
+  const blob=toWav(lastWave,SR);
+  if(audioUrl) URL.revokeObjectURL(audioUrl); audioUrl=URL.createObjectURL(blob);
+  $("#player").src=audioUrl; $("#mp3Btn").disabled=$("#wavBtn").disabled=false;
+  const tl=$("#timeline"); tl.innerHTML=""; const total=lastWave.length;
+  for(const s of spans){
+    if(s.pre){ const g=document.createElement("div"); g.style.width=(s.pre/total*100)+"%"; tl.appendChild(g); }
+    const d=document.createElement("div"); d.style.width=(s.len/total*100)+"%"; d.style.background=s.color; tl.appendChild(d);
+  }
+}
+
+$("#wavBtn").onclick=()=>lastWave&&download(toWav(lastWave,SR),"voice-studio.wav");
+$("#mp3Btn").onclick=()=>{
+  if(!lastWave) return;
+  try{ $("#genStatus").textContent="Encoding MP3…"; download(toMp3(lastWave,SR,128),"voice-studio.mp3"); $("#genStatus").textContent="MP3 saved."; }
+  catch(err){ log("MP3 export failed: "+err.message,"err"); }
+};
+$("#addVoice").onclick=()=>addVoice();
+
+/* ============================ INIT ============================ */
+addVoice("Mike"); addVoice("Aru");
+if(!navigator.gpu) log("WebGPU not detected. Use recent Chrome or Edge for usable speed; CPU mode is very slow.","err");
+</script>
+</body>
+</html>
