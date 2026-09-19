@@ -376,7 +376,8 @@ $("#loadBtn").onclick = loadModel;
 async function loadModel(){
   if(model) return;
   $("#loadBtn").disabled=true;
-  const hasGPU = !!navigator.gpu;
+  const forceCPU = new URLSearchParams(location.search).get("cpu") === "1";
+  const hasGPU = !!navigator.gpu && !forceCPU;
   device = hasGPU ? "webgpu" : "wasm";
   const set=(t,p)=>{ $("#modelStatus").textContent=t; if(p!=null) $("#modelBar").style.width=p+"%"; };
   env.useBrowserCache = true;
@@ -568,7 +569,7 @@ async function generate(){
     if(err.message==="__abort__"){
       if(parts.length){ lastWave=peakNormalize(concat(parts),0.92); finish(spans); $("#genStatus").textContent="Stopped. Partial audio kept."; }
       else $("#genStatus").textContent="Stopped.";
-    } else { log("Generation failed: "+err.message,"err"); $("#genStatus").textContent="Failed."; console.error(err); }
+    } else { log("Generation failed: "+err.message,"err"); if(/webgpu|OrtRun|buffer/i.test(err.message)) log("This is a GPU crash. Add ?cpu=1 to the end of the page address and reload for CPU mode (slower but stable).","err"); }
   }finally{
     busy=false; $("#genBtn").disabled=false; $("#stopBtn").disabled=true;
   }
@@ -594,6 +595,7 @@ $("#addVoice").onclick=()=>addVoice();
 
 /* ============================ INIT ============================ */
 addVoice("Mike"); addVoice("Aru");
+  if(new URLSearchParams(location.search).get("cpu")==="1") log("CPU mode is on (slow but stable).");
 if(!navigator.gpu) log("WebGPU not detected. Use recent Chrome or Edge for usable speed; CPU mode is very slow.","err");
 </script>
 </body>
